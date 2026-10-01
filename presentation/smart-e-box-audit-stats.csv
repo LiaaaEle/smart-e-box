@@ -1,0 +1,4 @@
+total;predicted_category_corrects;predicted_category_taux;predicted_priority_corrects;predicted_priority_taux
+30;28;93,30%;13;43,30%
+48;44;91,70%;24;50%
+60;53;88,30%;28;46,70%
