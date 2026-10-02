@@ -1,0 +1,638 @@
+{
+  "name": "Smart-E-Box_v2",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -624,
+        176
+      ],
+      "id": "6771fba5-37db-4f2d-a17e-99a0402337c0",
+      "name": "Button Start"
+    },
+    {
+      "parameters": {
+        "url": "=https://raw.githubusercontent.com/LiaaaEle/smart-e-box/main/docs/messages1.jsonl",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -368,
+        176
+      ],
+      "id": "b45382e0-2379-4873-a495-036d7917918d",
+      "name": "Get Emails"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lines = $input.first().json.data.split('\\n').filter(l => l.trim());\nreturn lines.map(l => {\n  const m = JSON.parse(l).messages;\n  const label = JSON.parse(m.find(x => x.role === 'assistant').content);\n  const text = m.find(x => x.role === 'user').content;\n\n  const subject = text.split('\\n')[0].replace('Subject: ', '');\n  const body = text.split('\\nBody: ').slice(1).join('\\nBody: ');\n\n  return { json: {\n    subject: subject,\n    body: body,\n    category: label.category,\n    priority: label.priority,\n    action: label.action\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        176
+      ],
+      "id": "0d4f6cdc-21e3-411b-b712-3cbc99ddc17b",
+      "name": "Extract fields"
+    },
+    {
+      "parameters": {
+        "tableId": "emails",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "subject",
+              "fieldValue": "={{ $json.subject }}"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "={{ $json.body }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $json.category }}"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "={{ $json.priority }}"
+            },
+            {
+              "fieldId": "action",
+              "fieldValue": "={{ $json.action }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        352,
+        176
+      ],
+      "id": "6533ddbe-d35a-4327-9877-68ac2e7d46a5",
+      "name": "Insert Fields in Emails Table",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        624,
+        544
+      ],
+      "id": "dc8e1140-a9fa-4a34-bf37-41ef0bea825c",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YtvH9TNyYZd6Gexp",
+          "name": "OpenAI account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "emails",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id_email",
+              "condition": "eq",
+              "keyValue": "={{ $json.id_email }}"
+            },
+            {
+              "keyName": "predicted_category",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "predicted_category",
+              "fieldValue": "={{ ['meeting_request','customer_support','finance','travel','phishing','personal','unknown'][$prevNode.outputIndex] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1296,
+        208
+      ],
+      "id": "efb68d59-cfd8-4c0c-8e73-cab586109af4",
+      "name": "Add predicted_category",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const maxPerCategory = 8;\nconst counts = {};\n\nreturn items.filter(item => {\n  const category = item.json.category;\n\n  if (!category) return false;\n\n  counts[category] = (counts[category] || 0) + 1;\n\n  return counts[category] <= maxPerCategory;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        176
+      ],
+      "id": "59502662-adae-4c28-9e02-6d3893ab0b38",
+      "name": "Email Sample by Category"
+    },
+    {
+      "parameters": {
+        "inputText": "=   Subject: {{ $json.subject }}\n   Body: {{ $json.body }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "meeting_request",
+              "description": "=Invitation, request or change to a meeting or call"
+            },
+            {
+              "category": "customer_support",
+              "description": "Customer reporting a problem or asking for help"
+            },
+            {
+              "category": "finance",
+              "description": "Invoice, payment, budget, refund or expense"
+            },
+            {
+              "category": "travel",
+              "description": "Booking, flight, hotel or business trip"
+            },
+            {
+              "category": "phishing",
+              "description": "Scam attempt, suspicious link or request for credentials"
+            },
+            {
+              "category": "personal",
+              "description": "Private message from a friend, family member or colleague, not work-related"
+            },
+            {
+              "category": "unknown",
+              "description": "Email that does not fit any other category"
+            }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "Please classify the text provided by the user into one of the following categories: {categories}, and use the provided formatting instructions below. When you do not know which category to choose, classify as \"unknown\". Don't explain, and only output the json. Assign exactly one category, never more than one. Private or family matter, including personal events and gatherings, not work-related",
+          "batching": {
+            "batchSize": 5,
+            "delayBetweenBatches": 1000
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        592,
+        32
+      ],
+      "id": "b6c95d67-f027-4665-85ac-f94f17201106",
+      "name": "Category Classifier"
+    },
+    {
+      "parameters": {
+        "inputText": "=   Predicted category: {{ $json.predicted_category }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "high",
+              "description": "Business mails like meeting requests, finance, and customer support"
+            },
+            {
+              "category": "medium",
+              "description": "Personal and travel mails"
+            },
+            {
+              "category": "urgent",
+              "description": "Phishing mails"
+            },
+            {
+              "category": "unknown"
+            }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "Please classify the text provided by the user into one of the following priorities: {categories}, and use the provided formatting instructions below. When you do not know which priority to choose, classify as \"unknown\". Don't explain, and only output the json. Assign exactly one priority, never more than one.",
+          "batching": {
+            "batchSize": 5,
+            "delayBetweenBatches": 1000
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        1584,
+        144
+      ],
+      "id": "d7f16bef-362b-4d2f-a9a2-7aee7a67d0b1",
+      "name": "Priority Classifier"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "emails",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id_email",
+              "condition": "eq",
+              "keyValue": "={{ $json.id_email }}"
+            },
+            {
+              "keyName": "predicted_priority",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "predicted_priority",
+              "fieldValue": "={{ ['high','medium','low','urgent','unknown'][$prevNode.outputIndex] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2096,
+        160
+      ],
+      "id": "c95c15ad-37ad-4fe6-88ec-50bf205b84a3",
+      "name": "Add predicted_priority",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputText": "=   Predicted category: {{ $json.predicted_category }}\nPredicted priority: {{ $json.priority }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "forward",
+              "description": "Medium priority"
+            },
+            {
+              "category": "reply",
+              "description": "High priority and finance"
+            },
+            {
+              "category": "flag",
+              "description": "High priority and customer request"
+            },
+            {
+              "category": "ignore",
+              "description": "Phishing emails"
+            },
+            {
+              "category": "unknown"
+            }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "Please classify the text provided by the user ({{ $json.predicted_category }} and {{ $json.predicted_priority }}) into one of the following actions: {categories}, and use the provided formatting instructions below. When you do not know which priority to choose, classify as \"unknown\". Don't explain, and only output the json. Assign exactly one action, never more than one. If the email has \"phishing\" as {{ $json.predicted_category }}, classify as \"ignore\".",
+          "batching": {
+            "batchSize": 5,
+            "delayBetweenBatches": 1000
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        2352,
+        128
+      ],
+      "id": "70cbcbb1-49ba-4cb6-80cb-f50030ca6370",
+      "name": "Action Classifier"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "emails",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id_email",
+              "condition": "eq",
+              "keyValue": "={{ $json.id_email }}"
+            },
+            {
+              "keyName": "predicted_action",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "predicted_action",
+              "fieldValue": "={{ ['forward','reply','flag','ignore','unknown'][$prevNode.outputIndex] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        2784,
+        160
+      ],
+      "id": "b682b667-c872-4a76-a79b-e176ec88808d",
+      "name": "Add predicted_action",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Button Start": {
+      "main": [
+        [
+          {
+            "node": "Get Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Emails": {
+      "main": [
+        [
+          {
+            "node": "Extract fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract fields": {
+      "main": [
+        [
+          {
+            "node": "Email Sample by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Fields in Emails Table": {
+      "main": [
+        [
+          {
+            "node": "Category Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Category Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Priority Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          },
+          {
+            "node": "Action Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Sample by Category": {
+      "main": [
+        [
+          {
+            "node": "Insert Fields in Emails Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Category Classifier": {
+      "main": [
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        [],
+        [],
+        []
+      ]
+    },
+    "Add predicted_category": {
+      "main": [
+        [
+          {
+            "node": "Priority Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority Classifier": {
+      "main": [
+        [
+          {
+            "node": "Add predicted_priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_priority",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Add predicted_priority": {
+      "main": [
+        [
+          {
+            "node": "Action Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Classifier": {
+      "main": [
+        [
+          {
+            "node": "Add predicted_action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "781e3191-13c1-40ca-999e-98efe9739f9f",
+  "meta": {
+    "instanceId": "644cb2fadaf799142cabedc804be74ca15a60aa2cb7fb443c746a73e415e7dbe"
+  },
+  "nodeGroups": [],
+  "id": "VSdtbv7eeiTFareX",
+  "tags": []
+}

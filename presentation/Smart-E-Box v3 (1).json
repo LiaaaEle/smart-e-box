@@ -1,0 +1,837 @@
+{
+  "name": "Smart-E-Box v3",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2448,
+        384
+      ],
+      "id": "e95c7c5a-0ea7-403e-9bb3-1367cdd853c1",
+      "name": "Button Start"
+    },
+    {
+      "parameters": {
+        "url": "=https://raw.githubusercontent.com/LiaaaEle/smart-e-box/main/docs/messages1.jsonl",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        -2192,
+        384
+      ],
+      "id": "e387f6e3-828e-4896-bb8d-4d2c034c3d87",
+      "name": "Get Emails"
+    },
+    {
+      "parameters": {
+        "jsCode": "const lines = $input.first().json.data.split('\\n').filter(l => l.trim());\nreturn lines.map(l => {\n  const m = JSON.parse(l).messages;\n  const label = JSON.parse(m.find(x => x.role === 'assistant').content);\n  const text = m.find(x => x.role === 'user').content;\n\n  const subject = text.split('\\n')[0].replace('Subject: ', '');\n  const body = text.split('\\nBody: ').slice(1).join('\\nBody: ');\n\n  return { json: {\n    subject: subject,\n    body: body,\n    category: label.category,\n    priority: label.priority,\n    action: label.action\n  }};\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1952,
+        384
+      ],
+      "id": "d1dbe045-2da9-4fe2-b9ab-661ebc4f0cf1",
+      "name": "Extract fields"
+    },
+    {
+      "parameters": {
+        "tableId": "emails",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "subject",
+              "fieldValue": "={{ $('Email Sample by Category').item.json.subject }}"
+            },
+            {
+              "fieldId": "body",
+              "fieldValue": "={{ $('Email Sample by Category').item.json.body }}"
+            },
+            {
+              "fieldId": "category",
+              "fieldValue": "={{ $('Email Sample by Category').item.json.category }}"
+            },
+            {
+              "fieldId": "priority",
+              "fieldValue": "={{ $('Email Sample by Category').item.json.priority }}"
+            },
+            {
+              "fieldId": "action",
+              "fieldValue": "={{ $('Email Sample by Category').item.json.action }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -1232,
+        384
+      ],
+      "id": "8184a5eb-ca30-4a90-a89f-72648e3f197d",
+      "name": "Insert Fields in Emails Table",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -912,
+        752
+      ],
+      "id": "8655481b-c773-47a5-8adc-02ec21b1d842",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "YtvH9TNyYZd6Gexp",
+          "name": "OpenAI account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "emails",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            },
+            {
+              "keyName": "predicted_category",
+              "condition": "is",
+              "keyValue": "null"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "predicted_category",
+              "fieldValue": "={{ ['meeting_request','customer_support','finance','travel','newsletter','promotion','spam','phishing','system_update','personal','unknown'][$prevNode.outputIndex] }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        240
+      ],
+      "id": "c7ef6074-01cc-45bc-8657-75e81f2dc466",
+      "name": "Add predicted_category",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "inputText": "=   Subject: {{ $json.subject }}\n   Body: {{ $json.body }}",
+        "categories": {
+          "categories": [
+            {
+              "category": "meeting_request",
+              "description": "=Invitation, request or change to a meeting or call, even if it involves travel"
+            },
+            {
+              "category": "customer_support",
+              "description": "Customer reporting a problem or asking for help"
+            },
+            {
+              "category": "finance",
+              "description": "Invoice, payment, budget, refund or expense"
+            },
+            {
+              "category": "travel",
+              "description": "Booking, flight, hotel or itinerary, including trip-related expenses and receipts"
+            },
+            {
+              "category": "newsletter",
+              "description": "Regular informational content or subscription digest"
+            },
+            {
+              "category": "promotion",
+              "description": "Commercial offer, discount or advertising"
+            },
+            {
+              "category": "spam",
+              "description": "Unsolicited, irrelevant bulk message"
+            },
+            {
+              "category": "phishing",
+              "description": "Scam attempt, suspicious link or request for credentials"
+            },
+            {
+              "category": "system_update",
+              "description": "Technical notification, maintenance or software update"
+            },
+            {
+              "category": "personal",
+              "description": "Private message from a friend, family member or colleague, not work-related"
+            },
+            {
+              "category": "unknown",
+              "description": "Email that does not fit any other category"
+            }
+          ]
+        },
+        "options": {
+          "systemPromptTemplate": "Please classify the text provided by the user into one of the following categories: {categories}, and use the provided formatting instructions below. When you do not know which category to choose, classify as \"unknown\". Don't explain, and only output the json. Assign exactly one category, never more than one. Private or family matter, including personal events and gatherings, not work-related",
+          "batching": {
+            "batchSize": 5,
+            "delayBetweenBatches": 1000
+          }
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.textClassifier",
+      "typeVersion": 1.1,
+      "position": [
+        -992,
+        240
+      ],
+      "id": "a0188faa-07f2-4b7e-9ddc-06b3c0af642c",
+      "name": "Email Classifier"
+    },
+    {
+      "parameters": {
+        "jsCode": "const maxPerCategory = 3;\nconst counts = {};\n\nreturn items.filter(item => {\n  const category = item.json.category;\n\n  if (!category) return false;\n\n  counts[category] = (counts[category] || 0) + 1;\n\n  return counts[category] <= maxPerCategory;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1712,
+        384
+      ],
+      "id": "82d4188d-654e-45b0-9b79-ee29d5a7b7df",
+      "name": "Email Sample by Category"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "tableId": "emails",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            }
+          ]
+        },
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "quarantine"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        496
+      ],
+      "id": "238327e4-0dd0-42aa-84b3-96ba519f4566",
+      "name": "Quarantine phishing",
+      "credentials": {
+        "supabaseApi": {
+          "id": "lLlqsZsF5wivjQJw",
+          "name": "Supabase account 26"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": 10,
+        "filters": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -112,
+        704
+      ],
+      "id": "065bb93a-8b9c-43ee-93e4-a46988d07a5b",
+      "name": "Get many messages",
+      "webhookId": "6aaa7e91-33fe-4489-ba40-4ff6f6e1c147"
+    },
+    {
+      "parameters": {
+        "sendTo": "smart.ebox.project@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "emailType": "text",
+        "message": "={{ $json.body }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        -1472,
+        384
+      ],
+      "id": "88469666-5808-4962-89de-cd393e64e04d",
+      "name": "Send a message",
+      "webhookId": "7bd3a203-7966-41a9-bdcb-79cd058da49c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "A6g7OGLXpk5HUaxT",
+          "name": "Gmail account 13"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "returnAll": true
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        0
+      ],
+      "id": "0dfa53e8-ec73-409d-8a76-7e3ef26ab563",
+      "name": "Get many labels",
+      "webhookId": "6256f7b2-d363-43d3-afde-ced4b9279118",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "resource": "label",
+        "operation": "create",
+        "name": "={{ $('Add predicted_category').item.json.predicted_category }}",
+        "options": {}
+      },
+      "id": "f43f8a5e-4581-453f-bd8f-77b077289193",
+      "name": "Create labels",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "01b62287-8522-49c8-bd2a-c86b075fc1a7",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "text": "=Category: {{ $('Add predicted_category').item.json.predicted_category }}\nSubject: {{ $('Email Sample by Category').item.json.subject }}\nBody: {{ $('Email Sample by Category').item.json.body }}",
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"priority\": {\n      \"type\": \"string\",\n      \"enum\": [\n        \"urgent\",\n        \"high\",\n        \"medium\",\n        \"low\"\n      ],\n      \"description\": \"How quickly the email needs attention.\"\n    },\n    \"reply\": {\n      \"type\": \"string\",\n      \"description\": \"ONLY if priority is urgent AND the email is not phishing: a short, polite, professional reply in the same language as the email, ready to send, without placeholders. Otherwise an empty string.\"\n    }\n  },\n  \"required\": [\n    \"priority\",\n    \"reply\"\n  ]\n}",
+        "options": {
+          "batching": {
+            "batchSize": 5,
+            "delayBetweenBatches": 1000
+          }
+        }
+      },
+      "id": "e2904c0e-a7f4-46f2-b0fb-80041db74959",
+      "name": "Priority & Reply",
+      "type": "@n8n/n8n-nodes-langchain.informationExtractor",
+      "typeVersion": 1.2,
+      "position": [
+        -256,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "openai/gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "openai/gpt-4o-mini"
+        },
+        "builtInTools": {},
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "28eaedad-881f-4863-a1f6-d4e5b1cd1507",
+      "name": "OpenAI Chat Model 2",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -128,
+        464
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YtvH9TNyYZd6Gexp",
+          "name": "OpenAI account 7"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addLabels",
+        "messageId": "={{ $('Send a message').item.json.id }}",
+        "labelIds": "={{ [ $('Get many labels').all().find(l => l.json.name === $('Add predicted_category').item.json.predicted_category).json.id ] }}"
+      },
+      "id": "83646cc0-52a0-4e3e-a553-da9632f8a1a2",
+      "name": "Add category label",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        720,
+        240
+      ],
+      "webhookId": "1362bd14-708e-4051-9984-3db9e7495485"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "b7ae739e-4e52-43d4-95cb-0660400a834c",
+              "leftValue": "={{ $('Add predicted_category').item.json.predicted_category }}",
+              "rightValue": "phishing",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "7827905e-aca7-4077-b95b-5965cfbc2752",
+      "name": "Is phishing?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeLabels",
+        "messageId": "={{ $('Send a message').item.json.id }}",
+        "labelIds": "={{ ['INBOX'] }}"
+      },
+      "id": "0fc35da0-39b3-4d11-8577-1745bb03f4c3",
+      "name": "Remove from inbox",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        112
+      ],
+      "webhookId": "ce99d491-55fa-4c57-b8a0-da4d469c2d70"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "80403e7e-2fa7-46ba-a9af-10b30c8eefb2",
+              "leftValue": "={{ $('Priority & Reply').item.json.output.priority }}",
+              "rightValue": "urgent",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "d460c244-28e3-4d71-9cfe-487673f0764c",
+              "leftValue": "={{ $('Add predicted_category').item.json.predicted_category }}",
+              "rightValue": "phishing",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "2569c582-f2e9-401e-b496-0b29fb4a6070",
+      "name": "Is urgent?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        352
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "draft",
+        "subject": "=Re: {{ $('Email Sample by Category').item.json.subject }}",
+        "message": "={{ $('Priority & Reply').item.json.output.reply }}",
+        "options": {
+          "threadId": "={{ $('Send a message').item.json.threadId }}",
+          "sendTo": "={{ $('Send a message').params.sendTo }}"
+        }
+      },
+      "id": "a8f711c5-dba9-48cc-8211-4e28d0a88167",
+      "name": "Create reply draft",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        352
+      ],
+      "webhookId": "65678f4c-0cb6-4307-9d4c-7673c73a710c"
+    },
+    {
+      "parameters": {
+        "mode": "chooseBranch",
+        "useDataOfInput": 2
+      },
+      "id": "4bbf7cdb-7200-4f8a-b8e7-009997010b42",
+      "name": "Wait for labels",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        480,
+        240
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Button Start": {
+      "main": [
+        [
+          {
+            "node": "Get Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Emails": {
+      "main": [
+        [
+          {
+            "node": "Extract fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract fields": {
+      "main": [
+        [
+          {
+            "node": "Email Sample by Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Fields in Emails Table": {
+      "main": [
+        [
+          {
+            "node": "Email Classifier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Email Classifier",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Classifier": {
+      "main": [
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Quarantine phishing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Add predicted_category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Sample by Category": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add predicted_category": {
+      "main": [
+        [
+          {
+            "node": "Priority & Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Insert Fields in Emails Table",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create labels": {
+      "main": [
+        [
+          {
+            "node": "Get many labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model 2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Priority & Reply",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Priority & Reply": {
+      "main": [
+        [
+          {
+            "node": "Create labels",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Wait for labels",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Add category label": {
+      "main": [
+        [
+          {
+            "node": "Is phishing?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is urgent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is phishing?": {
+      "main": [
+        [
+          {
+            "node": "Remove from inbox",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is urgent?": {
+      "main": [
+        [
+          {
+            "node": "Create reply draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get many labels": {
+      "main": [
+        [
+          {
+            "node": "Wait for labels",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait for labels": {
+      "main": [
+        [
+          {
+            "node": "Add category label",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ec934d24-28af-4b66-aea2-3fd3475ed73c",
+  "meta": {
+    "instanceId": "644cb2fadaf799142cabedc804be74ca15a60aa2cb7fb443c746a73e415e7dbe"
+  },
+  "nodeGroups": [],
+  "id": "emeJQsaGEmTjrg4I",
+  "tags": []
+}
